@@ -4,14 +4,23 @@ import requests
 def get_current_time():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-def get_weather_temperature(city, value="2"):
-    url = f"https://wttr.in/{city}?format={value}"
+def get_weather_temperature(city):
+    url = f"https://wttr.in/{city}?format=3"
     response = requests.get(url)
+    # will raise HTTPError if response status code is 4xx or 5xx
+    response.raise_for_status()
     return response.text
+
+def get_user_city():
+    # url = "https://ipapi.co/json/"
+    # data = requests.get(url, timeout=10).json()
+    # return data['city'] + ", " + data['region_code'] + ", " + data['country_name']
+    return "tirupati"
 
 name_to_fn = {
     "get_current_time": get_current_time,
-    "get_weather_temperature": get_weather_temperature
+    "get_weather_temperature": get_weather_temperature,
+    "get_user_city": get_user_city
 }
 
 llm_tools = [
@@ -38,13 +47,21 @@ llm_tools = [
                     "city": {
                         "type": "string",
                         "description": "City name"
-                    },
-                    "value": {
-                        "type": "number",
-                        "description": "Report format types: 1. Concise (3 lines), 2. Standard (6 lines), 3. Detailed (10 lines)"
                     }
                 },
                 "required": ["city"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_user_city",
+            "description": "Returns the city where the user lives. Use this when the user says 'my city', 'my Home', 'where I live' or 'my location' without naming the city.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
             }
         }
     }
