@@ -17,6 +17,21 @@ def get_user_city():
     # return data['city'] + ", " + data['region_code'] + ", " + data['country_name']
     return "tirupati"
 
+def run_tool(tool):
+    args = json.loads(tool.function.arguments) or {}
+    try:
+        func_name = tool.function.name
+        func_args = json.dumps(args)
+
+        log(f"🔧 {func_name}({func_args})")
+        data = name_to_fn[func_name](**args)
+
+        log(f"   ↳ {data}")
+
+    except Exception as e:
+        data = {"error": str(e)}
+        warn(f"Error while running {func_name} : {e}")
+
 name_to_fn = {
     "get_current_time": get_current_time,
     "get_weather_temperature": get_weather_temperature,

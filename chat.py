@@ -1,7 +1,8 @@
 from openai import OpenAI 
 from dotenv import load_dotenv
 import os, json, time
-from tools import llm_tools, get_current_time, name_to_fn
+from utils.util import log,error,warn
+from utils.tools import llm_tools, get_current_time, name_to_fn, run_tool
 
 load_dotenv()
 
@@ -48,7 +49,7 @@ while True:
         "content": prompt
     })
 
-    for _ in range(MAX_ROUNDS):
+    for step in range(MAX_ROUNDS):
 
         response = client.chat.completions.create(
             model=model,
@@ -68,18 +69,11 @@ while True:
         #     response.choices[0].message.model_dump(exclude_none=True)
         # )
 
+        log(f"\nStep: {step + 1} model requested {len(response.choices[0].message.tool_calls)} tool call(s)\n")
 
         for tool in response.choices[0].message.tool_calls:
 
-            args = json.loads(tool.function.arguments) or {}
-            try:
-                data = name_to_fn[tool.function.name](**args)
-
-                print("[tool call]: " + tool.function.name + " " + json.dumps(args) + " " + str(data) + "\n")
-
-            except Exception as e:
-                data = {"error": str(e)}
-                print(f"Error while running {tool.function.name} : {e}")
+            data = run_tool(tool)
 
             messages.append({
                 "role": "tool",
