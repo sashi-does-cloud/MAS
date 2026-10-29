@@ -1,6 +1,11 @@
+# Standard libraries
+import os, json, time
+
+# Third-party packages
 from openai import OpenAI 
 from dotenv import load_dotenv
-import os, json, time
+
+# Custom packages
 from utils.util import log,error,warn
 from utils.tools import llm_tools, get_current_time, name_to_fn, run_tool
 
