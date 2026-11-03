@@ -1,0 +1,3 @@
+pooling: process of combining all the embeddings of a text (typically tokens) to a single embedding that represents the entire text 
+eg: "struggling between the life I want and the life I’m supposed to settle for"
+this is the entire text, breaking into tokens = ["strugg", "ling", "bet", "ween", ....] -> tokenization for each token and then merging
