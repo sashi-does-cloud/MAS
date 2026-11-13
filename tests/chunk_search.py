@@ -16,11 +16,13 @@ client = OpenAI(
 def load_documents():
 
     documents = []
-    for id, filename in enumerate(os.listdir("knowledge_base")):
+    path = os.path.join("knowledge_base")
 
-        path = os.path.join("knowledge_base", filename)
+    for id, filename in enumerate(os.listdir(path)):
 
-        with open(path, "r", encoding="utf-8") as file:
+        file_path = os.path.join(path, filename)
+
+        with open(file_path, "r", encoding="utf-8") as file:
 
             data = file.read()
 
@@ -43,12 +45,24 @@ def get_embedding(source_text):
 
 def add_embeddings(chunks):
 
-    for chunk in chunks:
-        embedding = get_embedding(chunk['text'])
-        chunk["embedding"] = embedding
+    store_path = os.path.join("store.json")
 
-    # print(chunks)
-    
+    try:
+        with open(store_path, "r", encoding="utf-8") as file:
+            data = json.load(file)
+            if data is not None:
+                return data 
+
+    except FileNotFoundError:
+        for chunk in chunks:
+            embedding = get_embedding(chunk['text'])
+            chunk["embedding"] = embedding
+
+        with open(store_path, "w", encoding="utf-8") as file:
+            json.dump(chunks, file, indent=4)
+        
+        return chunks
+
 def cosine_similarity(A, B):
 
     norm_a = np.linalg.norm(A)
@@ -115,7 +129,7 @@ def query(prompt, chunks, top_k):
 
 documents = load_documents()
 chunks = make_chunks(documents)
-add_embeddings(chunks)
+chunks = add_embeddings(chunks)
 
 query("what are the benefits of maternity leave?", chunks, 3)
 
