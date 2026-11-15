@@ -1,14 +1,14 @@
-# Standard libraries
-import os, json, time
 
-# Third-party packages
-from openai import OpenAI 
+import os
+import json
+import time
+
+from openai import OpenAI
 from dotenv import load_dotenv
 from types import SimpleNamespace
 
-# Custom packages
-from utils.util import log,error,warn
-from utils.tools import llm_tools, get_current_time, name_to_fn, run_tool
+from utils.util import log, error, warn
+from utils.tools import llm_tools, run_tool
 
 load_dotenv()
 
@@ -16,21 +16,20 @@ base_url = os.getenv("BASE_URL")
 api_key = os.getenv("API_KEY")
 model = os.getenv("MODEL")
 
-
 client = OpenAI(
     base_url=base_url,
     api_key=api_key
 )
 
-
 messages = []
 
 MAX_ROUNDS = 5
 
+
 def stream_chat(history):
 
     stream = client.chat.completions.create(
-        model=os.getenv("MODEL"),
+        model=model,
         messages=history,
         tools=llm_tools,
         stream=True
@@ -39,51 +38,64 @@ def stream_chat(history):
     response = ""
     tool_calls = {}
 
+    print("Assistant: ", end="", flush=True)
+
     for chunk in stream:
 
         if not chunk.choices:
             continue
 
-        delta = chunk.choices[0].delta 
-        init = False
+        delta = chunk.choices[0].delta
 
-        # merge content
+        # Stream assistant content
         if delta.content:
-            if not init:
-                print("Assistant: ", end=True, flush=True)
-                init = True
             response += delta.content
+            print(delta.content, end="", flush=True)
 
-        # merge tool calls
+        # Merge streamed tool calls
         for tc in (delta.tool_calls or []):
 
-            obj = calls.setdefault(
-                tc.id,
-                SimpleNamespace(id=None, function=SimpleNamespace(name="", arguments=""))
-            )
+            index = tc.index
+
+            if index not in tool_calls:
+                tool_calls[index] = SimpleNamespace(
+                    id="",
+                    type="function",
+                    function=SimpleNamespace(
+                        name="",
+                        arguments=""
+                    )
+                )
+
+            obj = tool_calls[index]
 
             if tc.id:
-                obj.index = tc.index
-            
+                obj.id = tc.id
+
             if tc.function:
+
                 if tc.function.name:
-                    obj.function.name += tc.function.name 
+                    obj.function.name += tc.function.name
+
                 if tc.function.arguments:
                     obj.function.arguments += tc.function.arguments
-        
-        if init:
-            print()
 
-        calls_list = []
-        for (key) in sorted(calls):
-            calls_list.append(calls[key])
-        
-        return response, calls_list
+    print()
+
+    calls_list = [
+        tool_calls[index]
+        for index in sorted(tool_calls)
+    ]
+
+    return response, calls_list
 
 
 def build_tool_calls_list(tools):
+
     payload = []
-    for tool in tool_calls:
+
+    for tool in tools:
+
         payload.append({
             "id": tool.id,
             "type": "function",
@@ -92,15 +104,51 @@ def build_tool_calls_list(tools):
                 "arguments": tool.function.arguments
             }
         })
-    
+
     return payload
+
+
+def execute_tool_calls(tool_calls):
+
+    for tool in tool_calls:
+
+        try:
+            arguments = json.loads(
+                tool.function.arguments
+            )
+
+            log(f"Executing tool: {tool.function.name}")
+
+            # Adapt run_tool to accept parsed arguments
+            data = run_tool(tool)
+
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool.id,
+                "content": json.dumps(data, default=str)
+            })
+
+
+        except Exception as e:
+
+            error(f"Tool execution failed: {e}")
+
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool.id,
+                "content": json.dumps({
+                    "error": str(e)
+                })
+            })
+
 
 while True:
 
-    prompt = input("\nuser: ")
+    prompt = input("\nUser: ")
+
     if prompt.lower() in ["exit", "bye"]:
         break
-    
+
     messages.append({
         "role": "user",
         "content": prompt
@@ -110,49 +158,38 @@ while True:
 
         response, tool_calls = stream_chat(messages)
 
-        # response = client.chat.completions.create(
-        #     model=model,
-        #     messages=messages,
-        #     tools=llm_tools,
-        # )  
-
+        # No tools requested: conversation turn completed
         if not tool_calls:
-            break
-
-        messages.append({
-            "role": "assistant", 
-            "content": response,
-            "tool_calls": build_tool_calls_list(tool_calls) 
-        })
-
-        log(f"\nStep: {step + 1} model requested {len(tool_calls)} tool call(s)\n")
-
-        for tool in tool_calls:
-
-            data = run_tool(tool)
 
             messages.append({
-                "role": "tool",
-                "tool_call_id": tool.id,
-                "content": str(data)
+                "role": "assistant",
+                "content": response
             })
+
+            break
+
+        # Add assistant tool-call message to history
+        messages.append({
+            "role": "assistant",
+            "content": response or None,
+            "tool_calls": build_tool_calls_list(tool_calls)
+        })
+
+        log(
+            f"Step {step + 1}: "
+            f"Model requested {len(tool_calls)} tool call(s)"
+        )
+
+        execute_tool_calls(tool_calls)
+
     else:
 
-        fallback = "Sorry, agent ran out of time"
+        fallback = "Sorry, agent ran out of time."
+
         messages.append({
-            "role": 'assistant',
+            "role": "assistant",
             "content": fallback
         })
 
-        print("qwen: " + fallback)
-
-        continue
-    
-    print("qwen: ", end="")
-    for chunk in response.choices[0].message.content or "":
-        print(chunk, end="", flush=True)
-        time.sleep(0.01)
-    print("\n")
-
-
+        print(f"Qwen: {fallback}")
 

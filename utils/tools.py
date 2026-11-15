@@ -1,9 +1,17 @@
 from datetime import datetime
+from utils.util import log, error, warn
+from rag import query, load_chunks
+
+import json
 import requests
 
 def get_current_time():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
+    return {
+        "current_time": datetime.now().strftime("%I:%M:%S %p"),
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "timezone": "Asia/Kolkata"
+    }
+    
 def get_weather_temperature(city):
     url = f"https://wttr.in/{city}?format=3"
     response = requests.get(url)
@@ -31,11 +39,25 @@ def run_tool(tool):
     except Exception as e:
         data = {"error": str(e)}
         warn(f"Error while running {func_name} : {e}")
+    
+    return data
+
+def search_knowledge_base(search_query, chunks=None, top_k=3):
+    log(f" search_knowledge_base(search_query={search_query!r}, top_k={top_k})")
+    if chunks is None:
+        log("   ↳ No chunks provided, loading from vector store...")
+        chunks = load_chunks()
+    log(f"   ↳ Searching over {len(chunks)} chunks")
+    result = query(search_query, chunks, top_k)
+    log(f"   ↳ Done. Returned top {top_k} results")
+    return result
+
 
 name_to_fn = {
     "get_current_time": get_current_time,
     "get_weather_temperature": get_weather_temperature,
-    "get_user_city": get_user_city
+    "get_user_city": get_user_city,
+    "search_knowledge_base": search_knowledge_base
 }
 
 llm_tools = [
@@ -77,6 +99,73 @@ llm_tools = [
                 "type": "object",
                 "properties": {},
                 "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_knowledge_base",
+            "description": (
+                "Searches the internal company knowledge base using semantic similarity "
+                "and retrieves the most relevant information. The knowledge base contains "
+                "the following company documents:\n\n"
+                "- **Leave Policy**: Casual leave (12 days/year), earned leave (18 days/year, "
+                "carry-forward up to 30), sick leave (10 days), maternity (26 weeks) and "
+                "paternity leave (10 days), and leave application via PeopleHub portal.\n"
+                "- **Travel Expense Policy**: Reimbursement rules, flight class guidelines "
+                "(economy vs business class), daily allowances (domestic and international), "
+                "and receipt requirements.\n"
+                "- **Medical Policy**: Health insurance coverage (5 lakh family floater), "
+                "cashless treatment, long medical leave, maternity hospitalization cover, "
+                "and annual health checkup.\n"
+                "- **HR Policies**: Working hours (10 AM–4 PM core), work-from-home rules, "
+                "onboarding process, performance review cycle (April & October), and notice "
+                "period (60 days standard).\n"
+                "- **Hiring Process**: Interview stages (5 rounds), offer letter timeline, "
+                "referral bonus (25,000 rupees), and new joiner onboarding.\n"
+                "- **Tech Docs**: Code review guidelines (2 approvals, <400 lines), "
+                "deployment windows (Tue/Thu 11 AM–4 PM), branch naming conventions, "
+                "and on-call rotation.\n"
+                "- **RCA / Incident Reports**: Post-mortem reports for production incidents "
+                "(e.g. payment service outage INC-4021) including timeline, root cause, fix, "
+                "and prevention steps.\n\n"
+                "Use this tool whenever the user asks about any company policy, HR rule, "
+                "engineering guideline, or incident report. Extract a concise, focused search "
+                "query from the user's question and pass it to the tool. If the topic is "
+                "unclear, ask the user to clarify before searching."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "search_query": {
+                        "type": "string",
+                        "description": (
+                            "A short, focused search query capturing the key topic from the "
+                            "user's message (e.g. 'maternity leave duration', 'business class "
+                            "flight approval', 'health insurance coverage limit', "
+                            "'deployment window production', 'referral bonus amount')."
+                        )
+                    },
+                    "chunks": {
+                        "type": "array",
+                        "items": {"type": "object"},
+                        "description": (
+                            "Pre-loaded list of document chunks with embeddings to search over. "
+                            "Each chunk is an object with 'text', 'source', 'chunk_id', and "
+                            "'embedding' fields. If not provided, chunks are loaded automatically "
+                            "from the vector store."
+                        )
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": (
+                            "Number of top matching chunks to return. Defaults to 3. "
+                            "Increase for broader coverage, decrease for a tighter result."
+                        )
+                    }
+                },
+                "required": ["search_query", "chunks"]
             }
         }
     }
