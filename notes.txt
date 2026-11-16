@@ -1,3 +1,19 @@
 pooling: process of combining all the embeddings of a text (typically tokens) to a single embedding that represents the entire text 
 eg: "struggling between the life I want and the life I’m supposed to settle for"
 this is the entire text, breaking into tokens = ["strugg", "ling", "bet", "ween", ....] -> tokenization for each token and then merging
+
+
+chromadb:
+1. "l2" - straight line dist b/w vectors (euclidean distance)
+2. "cosine" - compares by angle b/w two vectors
+3. "ip" (inner product) - scaler product
+
+Collection
+    | 
+    | -> Metadata - tags or labels that you can use to filter or search your documents
+    | -> EmbeddingFunction - process of converting text to vectors
+    | -> Storage
+    |     |
+    |     | -> Vector Storage - where your document embeddings are stored
+    |     | -> Metadata Storage - where your document metadata is stored
+    | 

@@ -50,7 +50,24 @@ def search_knowledge_base(search_query, chunks=None, top_k=3):
     log(f"   ↳ Searching over {len(chunks)} chunks")
     result = query(search_query, chunks, top_k)
     log(f"   ↳ Done. Returned top {top_k} results")
-    return result
+
+    # Blocks is for providing context to LLM
+    blocks = []
+
+    for chunk in result:
+        chunk_id = chunk["chunk_id"]
+        source = chunk["source"]
+        text = chunk["text"]
+        score = chunk["score"]
+
+        log(f"  {score:.2f} - {source} #{chunk_id}")
+
+        header = f"{source} #{chunk_id}"
+        block = f"{header}\n{text}"
+
+        blocks.append(block)
+
+    return blocks
 
 
 name_to_fn = {

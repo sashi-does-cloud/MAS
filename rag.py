@@ -139,6 +139,7 @@ def query(prompt, chunks, top_k):
         })
 
     sorted_chunks = sorted(res, key=lambda x: x['score'], reverse=True)
-    print(json.dumps(sorted_chunks[:top_k], indent=3))
+
+    return sorted_chunks[:top_k]
 
 
